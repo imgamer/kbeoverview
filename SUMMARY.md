@@ -1,3 +1,4 @@
 # Summary
 * [前言](README.md)
-* [介绍](content/Introduction.mdown)
+* [1. 介绍](content/Introduction.md)
+* [2. 经验法则](content/RulesOfThumb.md)
