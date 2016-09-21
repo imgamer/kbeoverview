@@ -21,7 +21,7 @@
 * **Event**  
   和call不同的是事件被发送到所注册的时间监听器，而不是已知的对象。
 * **Ghost**  
-  这是对非主体的real对象描述，从real对象复制而来，作为只读数据存在。主要用于实现动态负载平衡，kbengine目前还并未实现这个特性，仅仅用于传送功能。
+  这是对非主体的real镜像对象的描述，从real对象复制而来，作为只读数据存在。主要用于实现动态负载平衡，kbengine目前还并未实现这个特性，仅仅用于传送功能。
 * **Message**  
   一个message表示单个事件或者远程调用。
 * **Object**  
@@ -29,7 +29,7 @@
 * **Packet**  
   一个packet(网络数据包)是指message的集合，它对应tcp包中发送的数据。多说一句，和kbe不同，bigworld用的是自实现的可靠udp协议。
 * **Real**  
-  对象的权威表示，至少在某个cell中。目前在kbengine中所有的entity都是real。
+  entity对象的权威表示，至少会存在于某个cell中。目前在kbengine中所有的entity都是real。
 <br/>
-注：术语解释中提到的cell等概念需要往后阅读。
+注：术语解释中提到的**cell**概念需要往后阅读。
 
