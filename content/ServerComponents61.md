@@ -35,4 +35,20 @@ real entity在术语表中被引入以区分enityt的主体和ghost。下图显�
 The simplest method to transition between different spaces is simply to ʹpopʹ, i.e., to remove the entity from the old space and recreate it in the new one. This is simple on both client and server.
 A somewhat more sophisticated technique is to have an enclosed transition area such as a lift, which is precisely duplicated in both spaces. After the player enters the transition area, and it becomes enclosed, the developer can ʹpopʹ the player out of the old space and into the duplicate copy of the area in the new space. The client needs to transform the playerʹs position into the new coordinate system, discard knowledge of entities in the old space, and start building up knowledge of entities in the new space. Once the client has been updated and the position filters of the new entities are sufficiently filled, the player can leave the transition area (lift door opens) and continue. Much of this is automated by the CellApp.
 BigWorld has also been developing the concept of a gateway, which would allow transitions between spaces (or long‐range teleportation) without needing to wait. This would be done by maintaining ghosts of entities on the far side of a gateway, so that they can be sent to the client as it approaches the transition area. This solution would be suitable for public portals, or for frequently made transitions. Please contact BigWorld support if you wish to use gateways.
-在不同的space之间传送最简单的方法是简单的pop掉，比如把entity从老space移除同时在新space重新创建，在客户端和服务端都是这么简单。
+Entity在不同的space之间传送最简单的方法是简单的pop掉，比如把entity从老space移除同时在新space重新创建，在客户端和服务端都是这么简单。  
+一个更复杂点的技术是，设置一个像电梯那样的在两个space上都是精确复制的封闭过渡区域。在玩家进入过渡区域后就封闭起来，开发者就能把玩家从老space pop到新space上同样区域的重复拷贝上。客户端需要转换玩家的位置到新的坐标系统，丢弃在老space中entity认知，开始建立entity在新space中的认知。一旦客户端已经更新且新entity的位置filter也被充分填充，玩家就可以离开过渡区域（电梯门打开）继续游戏。这个过程是由CellApp自动完成的。   
+bw也在开发一个网关（gateway）的概念，这会允许在2个space间传送不再需要等待。实现方式是在网关的远端维持entity的ghost，所以它们就像在附近的过渡区域一样能被发送到客户端。这个解决方案适用于公共的空间入口或者频繁的传送。这是bigworld几年前提出的概念，现在应该已经实现了。
+
+### 6.1.5. witness优先级队列
+witness趋向于目击者的意思。  
+无论何时，当有一个客户端attach到entity，为了维护它AOI中的entity列表，一个被称为witness的子对象就会关联到entity。witness建立发送到客户端的更新包，它必须优先发送最重要的信息。客户端需要最接近它的其它entity的位置和其它信息能够准确和现时。更紧密的entity应该更新的更频繁。为了达到这个目的，witness保持了在它AOI中的entity列表作为优先级队列。  
+建造一个被发送到客户端的数据包，列表顶部的entity相关信息被加入到包中，直到达到需要的大小。信息包括了位置和方向，以及最后一次更新后entity所处理的事件。更多的细节请看后面的**事件历史(Event history)**。  
+更接近的entity接收更频繁的更新，同时获得更大的可用带宽份额。  
+引擎通过更新包的大小和更新频率来限制下行带宽。这些参数配置在<res>/server/kbengine_defs.xml中。
+
+
+
+
+
+
+
