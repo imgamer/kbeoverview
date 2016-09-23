@@ -32,23 +32,50 @@ real entity在术语表中被引入以区分enityt的主体和ghost。下图显�
 ![Cell 1 ensures that adjacent cells maintain ghosts of its real entities]()  
 
 #### 6.1.4. 在space间传送
-The simplest method to transition between different spaces is simply to ʹpopʹ, i.e., to remove the entity from the old space and recreate it in the new one. This is simple on both client and server.
-A somewhat more sophisticated technique is to have an enclosed transition area such as a lift, which is precisely duplicated in both spaces. After the player enters the transition area, and it becomes enclosed, the developer can ʹpopʹ the player out of the old space and into the duplicate copy of the area in the new space. The client needs to transform the playerʹs position into the new coordinate system, discard knowledge of entities in the old space, and start building up knowledge of entities in the new space. Once the client has been updated and the position filters of the new entities are sufficiently filled, the player can leave the transition area (lift door opens) and continue. Much of this is automated by the CellApp.
-BigWorld has also been developing the concept of a gateway, which would allow transitions between spaces (or long‐range teleportation) without needing to wait. This would be done by maintaining ghosts of entities on the far side of a gateway, so that they can be sent to the client as it approaches the transition area. This solution would be suitable for public portals, or for frequently made transitions. Please contact BigWorld support if you wish to use gateways.
 Entity在不同的space之间传送最简单的方法是简单的pop掉，比如把entity从老space移除同时在新space重新创建，在客户端和服务端都是这么简单。  
-一个更复杂点的技术是，设置一个像电梯那样的在两个space上都是精确复制的封闭过渡区域。在玩家进入过渡区域后就封闭起来，开发者就能把玩家从老space pop到新space上同样区域的重复拷贝上。客户端需要转换玩家的位置到新的坐标系统，丢弃在老space中entity认知，开始建立entity在新space中的认知。一旦客户端已经更新且新entity的位置filter也被充分填充，玩家就可以离开过渡区域（电梯门打开）继续游戏。这个过程是由CellApp自动完成的。   
-bw也在开发一个网关（gateway）的概念，这会允许在2个space间传送不再需要等待。实现方式是在网关的远端维持entity的ghost，所以它们就像在附近的过渡区域一样能被发送到客户端。这个解决方案适用于公共的空间入口或者频繁的传送。这是bigworld几年前提出的概念，现在应该已经实现了。
+一个更复杂点的技术是，设置一个像电梯那样的在两个space上都是精确复制的封闭过渡区域。在玩家进入过渡区域后就封闭起来，开发者就能把玩家从老space pop到新space上同样区域的重复拷贝上。客户端需要转换玩家的位置到新的坐标系统，丢弃在老space中的entity认知，开始建立entity在新space中的认知。一旦客户端已经更新且新entity的位置filter也被充分填充，玩家就可以离开过渡区域（电梯门打开）继续游戏。这个过程是由CellApp自动完成的。   
+bw也在开发一个传送门（gateway）的概念，这会允许在2个space间(或者长距离传送)传送不再需要等待。实现方式是在传送门(gateway)的远端维持entity的ghost，所以它们就像在附近的过渡区域一样能被发送到客户端。这个解决方案适用于公共的空间入口或者频繁的传送。这是bigworld几年前提出的概念，现在应该已经实现了。
 
-### 6.1.5. witness优先级队列
+#### 6.1.5. witness优先级队列
 witness趋向于目击者的意思。  
 无论何时，当有一个客户端attach到entity，为了维护它AOI中的entity列表，一个被称为witness的子对象就会关联到entity。witness建立发送到客户端的更新包，它必须优先发送最重要的信息。客户端需要最接近它的其它entity的位置和其它信息能够准确和现时。更紧密的entity应该更新的更频繁。为了达到这个目的，witness保持了在它AOI中的entity列表作为优先级队列。  
 建造一个被发送到客户端的数据包，列表顶部的entity相关信息被加入到包中，直到达到需要的大小。信息包括了位置和方向，以及最后一次更新后entity所处理的事件。更多的细节请看后面的**事件历史(Event history)**。  
 更接近的entity接收更频繁的更新，同时获得更大的可用带宽份额。  
 引擎通过更新包的大小和更新频率来限制下行带宽。这些参数配置在<res>/server/kbengine_defs.xml中。
 
+##### 6.1.5.1. 事件(event)历史
+每个entity保持着最近的事件历史记录。历史记录包括它的状态改变（例如武器变化）以及是否进行一些动作（诸如跳跃或者射击）。但移动等影响volatile数据的高频动作不会被保持在历史记录列表中。  
+当entity使用（consumes）它的优先级队列去构建更新包时，它查找最优先的entity（例如，最接近自身的entity）事件，添加关心的信息，这就需要为在优先级队列里每个实体的最后更新保持一个时间戳（实际上是一个序列号）。  
+事件类型的历史记录是相当短的（约60秒），因为我们希望在最糟糕的情况下，优先级队列里的每个entity在30秒(大概)内都能轮到一次。  
 
+##### 6.1.5.2. Level of detail
+优先级队列为连续的信息进行数据节流。对于事件来说，我们仍需要处理有大量的事件充满可用的客户端下行带宽的情况。  
+当entity的AOI中存在大量的其它entity时，互相间的信息不会被经常发送，但事件的总量还是一样的。  
+为了解决这个问题，引擎使用了Level of Detail (LoD)系统处理基于事件的改变。这个原理是，越接近avatar的entity，越是需要把更多的细节发送给avatar的客户端。比如，一个玩家刚进入avatar的AoI时，avatar是不需要知道其它avatar的所有细节的。当距离100米时，仅需要看到轮廓。更精确的细节，如衣服上的徽章，在20米内就够了。  
 
+* **无状态改变事件（Non‐state‐changing events）**  
+在每个entity的类型描述中，随着每一个关联的优先级，会相应的创建所有消息的描述。  
+当一个avatar添加entity的信息时，只会添加entity中大于avatar的当前所关注优先级的消息。因此，消息是否会被忽略取决于avatar和entity之间的距离。  
+例如，某种聊天只能在50米内被听到，一个跳跃只能在100米内被看到。
+* **状态改变事件（State‐changing events）**  
+引擎无法忽略发生在范围之外的状态改变事件，因为如果entity随后足够接近，客户端得到的将是错误的状态数据，正确的还没同步过来。  
+例如，只有在100米以内，客户端才关注entity手里拿着什么样的武器。如果entity在这个距离外切换了武器，这个信息不会发送给客户端，引擎只会在entity进入这个范围才会发送。  
+而和非状态改变事件不同的是，如果优先级别有值的时候，状态改变事件会有开发者定义的LoDs状态的离散值。这些会被认为对客户端围绕着的环，entity类型的每个属性和这些环中的一个绑定。例如**某个entity def中的某个属性**。  
+例如，假设avatar A被4个同样类型的entity围着，avatar的LoD的级别分别是20m，100m和500m。它会根据距离来处理每个entity，如下表：  
 
+LoD消息处理。处理是yes，不处理是no：
 
+Entity | Distance | 20m | 100m | 500m
+------ | ------ | ---- | ----- | ------
+  E1 | 15M | [yes] | [yes] | [yes]
+  E2 | 90M | [no] | [yes] | [yes]
+  E3 | 400M | [no] | [no] | [yes]
+  E4 | 1000M | [no] | [no] | [no]
+
+![图片示例]()
+
+**这一段还需考虑下怎么写**
+当一个有witness的entity进入其它entity的LoD环圈中，任何已经改变的和这个LoD环圈相关的状态会因为它们是最近一次改变的被发送给客户端，引擎使用时间戳来达到这个目的，一个时间戳会和每个entity的每个属性一起记录，这个时间戳指明属性最后一次更新是什么时候。每一个在witness的AoI中的entity，当entity最后一次离开那个LoD环圈级别，对应的时间戳也会被保持。  
+由它本身而不允许我们去限制这个数据。为了达到这个目的，我们仅需要应用一个乘数因子到所关注的avatar级别，当这个avatar计算其它entity的时候，乘上一个小于1的因子而发送会减少数据量的影响。
 
 
