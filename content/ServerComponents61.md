@@ -41,7 +41,7 @@ witness趋向于目击者的意思。
 无论何时，当有一个客户端attach到entity，为了维护它AOI中的entity列表，一个被称为witness的子对象就会关联到entity。witness建立发送到客户端的更新包，它必须优先发送最重要的信息。客户端需要最接近它的其它entity的位置和其它信息能够准确和现时。更紧密的entity应该更新的更频繁。为了达到这个目的，witness保持了在它AOI中的entity列表作为优先级队列。  
 建造一个被发送到客户端的数据包，列表顶部的entity相关信息被加入到包中，直到达到需要的大小。信息包括了位置和方向，以及最后一次更新后entity所处理的事件。更多的细节请看后面的**事件历史(Event history)**。  
 更接近的entity接收更频繁的更新，同时获得更大的可用带宽份额。  
-引擎通过更新包的大小和更新频率来限制下行带宽。这些参数配置在<res>/server/kbengine_defs.xml中。
+引擎通过更新包的大小和更新频率来限制下行带宽。这些参数配置在res/server/kbengine_defs.xml中。
 
 ##### 6.1.5.1. 事件(event)历史
 每个entity保持着最近的事件历史记录。历史记录包括它的状态改变（例如武器变化）以及是否进行一些动作（诸如跳跃或者射击）。但移动等影响volatile数据的高频动作不会被保持在历史记录列表中。  
@@ -72,10 +72,158 @@ Entity | Distance | 20m | 100m | 500m
   E3 | 400M | [no] | [no] | [yes]
   E4 | 1000M | [no] | [no] | [no]
 
-![图片示例]()
+![图片示例]()  
 
-**这一段还需考虑下怎么写**
-当一个有witness的entity进入其它entity的LoD环圈中，任何已经改变的和这个LoD环圈相关的状态会因为它们是最近一次改变的被发送给客户端，引擎使用时间戳来达到这个目的，一个时间戳会和每个entity的每个属性一起记录，这个时间戳指明属性最后一次更新是什么时候。每一个在witness的AoI中的entity，当entity最后一次离开那个LoD环圈级别，对应的时间戳也会被保持。  
-由它本身而不允许我们去限制这个数据。为了达到这个目的，我们仅需要应用一个乘数因子到所关注的avatar级别，当这个avatar计算其它entity的时候，乘上一个小于1的因子而发送会减少数据量的影响。
+当一个有witness的entity进入其它entity的LoD环圈中，从上一次它们这么接近的时候算起（since they were last this close）任何已经改变的和这个LoD环圈相关的状态被发送给客户端，引擎使用时间戳来达到这个目的，时间戳会和entity的每个属性一起记录，这个时间戳指明属性最后一次更新是什么时候。每一个在witness的AoI中的entity，当entity最后一次离开那个LoD环圈级别，对应的时间戳也会被记录。  
+**（这段不准确，暂时这样）**由它本身而不允许我们去限制这个数据。为了达到这个目的，我们仅需要应用一个乘数因子到所关注的avatar级别，当这个avatar计算其它entity的时候，乘上一个小于1的因子而发送会减少数据量的影响。
+
+#### 6.1.6. entity的脚本编程（Scripting and entities）
+以下小结说明了如何对entity使用脚本。
+
+##### 6.1.6.1. Entity类
+一个entity类描述了一个entity类型。下表列出了entity的组成部分：  
+
+Part | File
+---- | -----
+An XML definition file | defs/entity.def
+A Python cell script | cell/entity.py
+A Python base script | base/entity.py
+
+Client需要自己解析协议并封装。  
+
+XML定义文件被当作脚本间的接口，它定义了所有的公共方法和属性，另外还定义了全局类的全局特性：  
+
+* entity是否需要一个volatile位置更新。
+* entity如何在客户端被初始化。
+* 如果有的话，entity的基类是什么。
+* 如果有的话，entity的实现接口是什么。  
+
+
+一个座位entity的定义文件（defs/Seat.def）如下
+```xml
+<root>
+	<Properties>
+		<seatType>
+			<Type> INT8 </Type>
+			<Flags> OTHER_CLIENT </Flags>
+			<Default> -1 </Default> <!-- See Seat.py -->
+			<DetailLevel> NEAR </DetailLevel>
+		</seatType>
+
+		<ownerID>
+			<Type> INT32 </Type>
+			<Flags> OTHER_CLIENT </Flags>
+			<Default> 0 </Default>
+		</ownerID>
+
+		<channel>
+			<Type> INT32 </Type>
+			<Flags> PRIVATE </Flags>
+		</channel>
+	</Properties>
+
+	<ClientMethods>
+		<clientMethod1>
+			<Arg> STRING </Arg> <!-- msg -->
+			<DetailDistance> 30 </DetailDistance>
+		</clientMethod1>
+	</ClientMethods>
+
+	<CellMethods>
+		<sitDownRequest>
+			<Exposed/>
+			<Arg> OBJECT_ID </Arg> <!-- WHO -->
+		</sitDownRequest>
+
+		<getUpRequest>
+			<Exposed/>
+			<Arg> OBJECT_ID </Arg> <!-- WHO -->
+		</getUpRequest>
+
+		<ownerNotSeated>
+		</ownerNotSeated>
+
+		<tableChat>
+			<Arg> STRING </Arg> <!-- msg -->
+		</tableChat>
+	</CellMethods>
+
+	<LoDLevels>
+		<level> 20 <hyst> 4 </hyst> <label> NEAR </label> </level>
+		<level> 100 <hyst> 10 </hyst> <label> MEDIUM </label> </level>
+		<level> 250 <hyst> 20 </hyst> <label> FAR </label> </level>
+	</LoDLevels>
+</root>
+```
+
+##### 6.1.6.3. 属性
+上一节的范例文件已经说明所有的属性都被定义在XML文件中，数据类型，可选的默认值，指明如何被复制的标志(flag)，还有一个可选的LoD级别标签。  
+所有的cell entity属性都需要被定义，即使是类的私有属性。这是因为CellApp需要卸载entity并发送到其它CellApp，定义所有的属性类型使得数据的传输尽可能高效。  
+当python脚本修改了一个属性的值，服务端负责把这个属性的改变更新到正确的地方。  
+以下用于XML文件的标志(flag)用来确定属性是如何被复制更新的：  
+
+* ALL_CLIENT
+  属性能被周围的客户端获得，包括自身。相当于同时设置了OWN_CLIENT和OTHER_CLIENT标志。
+* ALL_CLIENTS
+  同ALL_CLIENT
+* BASE
+  只能在Base上使用
+* BASE_AND_CLIENT
+  属性在base和客户端都可见，相当于同时设置了OWN_CLIENT和BASE标志。
+* CELL_PRIVATE
+  entity的内部属性。
+  只在cell的entity内部可见，相当于私有属性。对于没有ghost的kbe而言，同CELL_PUBLIC.
+* CELL_PUBLIC
+  可以被服务端的其它entity访问。在kbe中，现在暂时和CELL_PUBLIC是一样的。
+* CELL_PUBLIC_AND_OWN
+  在cell上的其它entity可见，对客户端来说，仅自身客户端可见
+* ...  
+
+当一个属性值变化了，服务端会使用OWN_CLIENT和ALL_CLIENTS去检测需要同步到entity自身的客户端，使用OTHER_CLIENTS和ALL_CLIENTS去检测是否需要同步到其它客户端。  
+如果一个服务端脚本修改了一个ALL_CLIENTS属性，这个改变会被复制到这个entity本身的客户端和所有其它附近的客户端，（bigworld还会更新到所有相邻的ghost）。
+属性定义还包括DetailLevel标签，这用于数据的LoD处理。详细解释参见<服务端编程指南>。  
+
+注意：当一个客户端修改了一个共享属性，这个变化不会发送给服务端，所有客户端和客户端的通信都必须通过远程方法调用。
+
+##### 6.1.6.4. 内置属性
+除XML文件中定义的属性，cell entity脚本还能访问一些cell脚本环境提供的内置属性：  
+  
+Built-in Property | Read/Write | Description
+------- | ------- | ----------
+id | Read-only | entity的整型ID
+spaceID | Read-only | entity所在space的ID
+vehicle | Read-only | entity的坐骑entity，没有则为None
+position | Read/write | entity的位置，3个浮点数组成的元组
+direction | Read/write | entity的方向，描述roll，pitch，yaw的元组
+isOnGround | Read/write | 整型标志，1标示entity在地面上，0则是不在
+
+可以通过改变entity的position属性来移动。但持续的移动，推荐使用moveToPoint方法。spaceID和vehicle属性会分别被teleport和boardVehicle方法影响。
+
+##### 6.1.6.5. 方法
+和属性类似，方法也被定义在XML文件中，client，cell和base方法被分成不同的部分。每个方法都有用名字和参数列表定义。
+Cell和base方法有可选的<Exposed/>标签，用于说明此方法是否能被客户端远程调用。在cell上的Exposed方法有一个隐藏参数source，这是和调用此方法的客户端相关联entity的ID。方法定义也有一个DetailDistance标签，用于做LoD（前面说的无）。
+
+##### 6.1.6.6. 调用客户端方法
+Cell entity在其它entity的AoI中时，会在它们的客户端拥有一个相应的entity对象。有些时候cell entity想要调用所有这些client entity的方法时，有几个可用的cell脚本属性来方便调用：  
+* ownClient
+* otherClients
+* allClients
+* clientEntity
+使用这些对象调用的方法会被分发给指定的客户端。  
+例如，调用附近所有entity的在客户端上的chat方法：
+self.allClients.chat( "hi!" )  
+
+##### 6.1.6.7. 内置方法
+cell脚本能够访问一些内置的方法，其中一些如下：
+
+Built-in Method | Description
+------- | ------- 
+destroy | 销毁entity自身
+addTimer | entity所在space的ID
+moveToPoint | 直线移动entity到某个点
+moveToEntity | 把entity移动到另外一个entity的位置
+navigate | entity向某个点移动，避免碰撞(使用寻路数据)
+cancel | 撤销一个controller（timer），在kbengie中没有controller的概念
+entitiesInRange | 找出指定半径内的所有指定entity
 
 
