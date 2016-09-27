@@ -230,5 +230,56 @@ entitiesInRange | 找出指定半径内的所有指定entity
 
 
 ##### ~~6.1.6.8. Controllers~~
+这是Bigworld引擎专有概念。kbengine是开源引擎，不考虑代码隐藏，实现上更为简单一些。  
+controller是一个和cell entity相关的c++对象，它通常用于处理对脚本来说比较低效或者困难的任务，它可以有状态信息，如果entity卸载到另外一个cell，这些信息也能够通过网络传输迁移。  
+当前已经实现的controller是：  
 
-Bigworld引擎专有概念。在kbengine中
+* TimerController:................提供异步的计时回调。
+* MoveToPointController:..........使用给定的速度把entity移动到某个位置。
+
+controller通常被脚本调用引发创建，例如entity.moveToPoint、entity.addTimer。任何脚本调用会创建一个controller并返回一个controller ID，这是一个唯一标识controller的整型值，使用这个ID作为参数调用entity.cancel，可以销毁controller。注意：当entity销毁后，cell会自动销毁它所有的controller。  
+因为controller的处理通常是异步的，它们通过调用一个固定名字的脚本回调来通知完成的脚本对象。例如，TimerController的事件回调函数是onTimer，MoveToPointController的回调是onMove。  
+
+##### 6.1.6.9. entity继承
+一个entity类可能会从其他的entity类继承而来，会获得基类所有的属性和方法。如果.def文件使用了<Implements>标签描述了多个接口，还能添加自己的接口（interfaces）。  
+甚至一个继承的类在客户端上实例化的时候，允许行为和它的基类一样。这在客户端不需要得知所有服务端实现的附加方法和属性的的情况下很有用，客户端可以把派生类 entity当作基类entity处理（在客户端上不需要有派生类的定义），在允许服务端上创建新的类派生于基类，但是客户端不需要创建新的衍生类脚本。
+
+##### 6.1.6.10. 脚本文件范例
+
+```python
+"entity类型定义"
+
+import KBEngine
+class Seat( KBEngine.Entity ):
+	def __init__( self ):
+		KBEngine.Entity.__init__(self)
+
+	# 略...
+```
+
+#### 6.1.7. 直接消息
+并不是所有的事件都是通过事件历史队列发送。如果一个事件是发往一个明确的玩家或者一小撮玩家，它几乎是在它的下一个包立即分发的。  
+例如，当一个玩家和一个avatar聊天，当信息到达的时候，能被立即传送到需要的avatar，avatar接着把它添加到它的下一个bundle发送给客户端。  
+
+#### ~~6.1.8. 从ghost转发~~
+在跨cell传送中收到消息如何处理，也依赖于kbengine跨地图传送的entity数据迁移是怎么做的。  
+
+以下是适用于bigworld的策略：  
+每个ghost都知道它的real cell在哪里，这样它可以把消息转发到real去处理。  
+大多数消息都是拉取(pull)类型，当另一个玩家跳起来——这由avatar决定（通过优先级队列）是否和何时把这个消息发送给它的客户端。  
+少数消息是推送(push)类型的，如玩家A想要和玩家B握手，要实现这个，客户端A发送一个握手请求到它的cell，接着发送一个请求到同cell的avatar B，avatarB可能是ghost，此时要转发这个请求到B的real主体，这个通信是自动和透明的。  
+从ghost到real的消息转发机制也用于避免当entity改变cell时产生的同步问题。通常base entity直接发送消息给real，但在cell entity传送中时，它可能暂时通过一个ghost发送消息。  
+
+#### 6.1.9. ~~卸载entity~~
+大约每秒一次，cell会检查是否要卸载entity到其它cell。每个entity都被视为紧靠当前cell边界，边界会被人为的增加（大约10米）以避免滞后。如果entity被发现超出了当前cell的边界，它会被卸载到最适当的cell（接壤的）。  
+当一个entity被卸载了，real entity对象会转换为ghost entity，反之亦然在一个entity被加载时（ghost变为real）。  
+
+#### 6.1.10. 添加和移除cell  
+当一个cell在运行时被添加到一个多cell组成的space，它会逐渐的扩张它的区域，避免entity试图改变cell时大幅波动。同样，在一处cell区域时也是缓慢逐渐减小区域知道所有的entity被移除。  
+更详细，请查看**接下来CellAppMgr有关这个主题的说明**。  
+
+#### 6.1.11. ~~负载平衡~~
+cell能够被移动来调整服务端处理的负载的比例。  
+基本（简单）的策略是如果一个cell和其它cell比较过载了，它的区域会被削减。相反，如果它的负荷不足，那么会增加它的区域。  
+
+
