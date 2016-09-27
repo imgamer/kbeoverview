@@ -229,3 +229,6 @@ cancel | 撤销一个controller（timer），在kbengie中没有controller的概
 entitiesInRange | 找出指定半径内的所有指定entity
 
 
+##### ~~6.1.6.8. Controllers~~
+
+Bigworld引擎专有概念。在kbengine中
