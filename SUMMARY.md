@@ -7,5 +7,7 @@
 * [4. 概念](content/Concepts41.md)  
     * [4.3 发布者/订阅者](content/Concepts43.md)
 * [5. 设计概论](content/DesignIntroduction51.md)  
-* [6. 服务端组件](content/ServerComponents61.md) 
+* [6. 服务端组件](content/ServerComponents61.md)  
+* [7. 其它特性](content/71otherfeatrues.md)  
+
 
