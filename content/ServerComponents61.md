@@ -405,11 +405,113 @@ BaseApp支持2个方案中的一个来进行容错：
 
 * 不需要专用的备份BaseApp
 * 备份负载可以分布在一段时间内。
-* 不需要IP转换，这可能不被操作系统或者路由允许。这也使得群组控制更容易。  
+* 不需要IP转换，这可能不被操作系统或者路由允许。这也使得集群控制更容易。  
+
+##### 6.3.3.1. 分布式BaseApp备份
+每个BaseApp备份它的entity到多个其它的BaseApp。每个BaseApp分配一组其它的BaseApp和一个哈希函数（处理？）从entity的ID到其中一个的备份。 
+经过一段时间，每个BaseApp的entity都将备份到其它常规的BaseApp。这个处理会一直进行，保证新的entity也会备份。如果一个BaseApp挂了，它的每个entity会在备份BaseApp恢复。  
+
+![Distributed BaseApp Backup – Dead BaseApp's entities can be restored to Backup BaseApp]()
+
+这个方法的缺点是，存在可能性，base entity之前在同一个BaseApp，之后却在不同的BaseApp（这会影响脚本编程，注意到这个情况），还有就是BaseApp出错后，连接的客户端将会断开，需要重新登录。  
+
+##### 6.3.3.2. 非分布式BaseApp备份
+这个方法需要专用BaseApp来备份正在使用的BaseApp。每个BaseApp周期性的把备份的entity数据复制到它关联的备份BaseApp。  
+一个备份BaseApp能够给多个BaseApp做备份，当一个BaseApp不可用时，备份BaseApp会整个取代这个进程。  
+
+![Non-distributed BaseApp Backup– Backup BaseApp can take the place of missing BaseApp]()
+
+### 6.4. BaseAppMgr
+#### 6.4.1. 实现(Implementation)
+当一个BaseApp启动，它会把自己注册到BaseAppMgr，BaseAppMgr负责维护一个所有BaseApp的列表。
+
+#### 6.4.2. 登录
+当客户端登录，LoginApp（通过DBMrg）发送一个请求给BaseAppMgr请求添加玩家到系统。BaseAppMgr接着会添加一个proxy到负载最小的BaseApp。然后BaseAppMgr发送proxy的Ip地址给LoginApp，IP会被发送到客户端，客户端接着会使用这个IP地址和服务端进行通信。
+
+#### 6.4.3. 容错
+在出错的情况下，Reviver会重启BaseAppMgr。BaseApp会重新注册到BaseAppMgr，继续运行。  
+更详细的请看关于Reviver的章节。
+
+### 6.5. LoginApp
+#### 6.5.1. 实现（Implementation）
+每个LoginApp都监听一个固定的端口（可配置）等待客户端登录。  
+客户端登录的详细步骤和案例在设计概念章节已经介绍。  
+所有LoginApp的请求都是非阻塞的，因此它可以同时处理很多登录请求。
+
+#### 6.5.2. 部署多个LoginApp
+根据负载，单一的LoginApp应能满足大多数情况。尽管如此，还会有潜在的瓶颈，和可能的失败。引擎支持部署多个LoginApp。  
+剩下的问题是如何在多个登录服务器分配客户端的登录请求。标准的方式是使用一个DNS方案类似一些流行的web服务在多个服务器平衡负载的方法。  
+
+### 6.6. DBMgr
+当前只实现了一种数据库接口组件，即MySQL。当然可以扩展其它的数据库类型，如MongoDB，Redis，你自己定制的其它类型。
+
+#### 6.6.1. MySQL
+MySQL实现了和MySQL数据库的通信，通过原生的MySQL接口。MySQL可以运行在同一台机器或者其它机器，因为协议是基于TCP的。  
+每个entity类型存储在一个SQL分表中，每个类的属性是一个字段(column)，标的索引是DataBaseID。  
+启动时，SQL数据库架构会检查定义entity的XML文件，确保它们存在。如果一些entity类型没有数据库表，会被自动创建。如果一些类有新的属性定义到XML文件中，但数据库中没有，字段会被自动添加到相应的表中。当架构变化很频繁时，这个功能在开发中非常实用。  
 
 
+#### 6.6.2. 容错
+在失败的情况下，DBMgr能够被Reviver重启（在一个不同的机器）。一旦DBMgr重启，它会通过machine进程来广播它的存在，所有其它需要的组件会开始和它通信。
 
+MySQL数据库层也能够对一些类型的错误进行容错。如果MySQL数据库的连接丢失，它能够通过配置去连接同样的数据库，或者它的一个副本。  
+~~bigworld的XML数据库是没有容错的，因为所有的数据存在RAM中直到关机。尽管DBMrg可以被Reviver重新启动，但所有在服务器上次关闭后的更新全部会丢失。~~  
+DBMgr还扮演着引擎次级容错的角色。更多细节，查看<服务端编程指南>的灾难恢复章节。  
 
+#### ~~6.6.3 BigWorld的XML数据库~~
+**无需阅读。**  
+The XML implementation saves data in a single XML file—`<res>/entities/db.xml`. This is good for running small servers, since it is lightweight, and does not have any dependencies on an external database.  
+In this implementation, DBMgr reads the XML file on startup, and caches all player descriptions in memory. No disk I/O is performed until shutdown, when the entire XML file is written to disk.  
+The XML database has several known limitations that make it unsuitable for production or serious development environments. It differs significantly to the MySQL database in the area of login processing. For more details, see the document Server Programming Guide, section User Authentication And Proxy Selection, Special notes about the XML database.  
 
+### 6.7. Reviver（未实现）
+Reviver是一个看门狗进程用来在其它进程失败的时候重启它们（因为机器的进程在运行时失败或者进程本身崩溃没反应了）。Reviver在专用的机器上启动用于做容错处理，等待其它进程连接过来。  
+使用Reviver的进程如下：  
 
+* CellAppMgr
+* BaseAppMgr
+* DBMgr
+* LoginApp
 
+这几个进程启动后，会在网络上搜寻Reviver，然后连接过去（如果被Revier支持的话）。Reviver周期性的ping这些进程，以检查他们是否可用。如果进程不可用（没有回复），Reviver将重启自己来替代失败的进程和机器，出错的机器/进程可以关闭服务了。  
+因为Reviver在恢复一个进程后停止运行，需要多个Reviver（运行在不同的机器）。Reviver使用Machine进程来气筒新的进行。  
+如果一个Reviver崩溃了，请求被管理的进程会检测到失效的ping并重新查找一个新的Reviver。这取决于确保足够的Reviver运行在合适的机器上。  
+不推荐的方式是，Reviver能够通过命令行被启动，请查看<服务端操作指南>的容错章节。
+
+### 6.8. Machine
+Machine守护进程运行在服务器集群的每一台机器上，可以设置在开机时自动启动。它负责：
+
+* 启动和停止服务端组件。
+* 定位服务端组件。
+* 提供机器信息统计（CPU速度，网络状态，等等）。
+* 提供处理统计（内存和CPU用量）。
+
+以下子章节描述了各个职责。
+
+#### 6.8.1. 启动和停止服务端组件
+Machine能够远程的启动和停止服务端组件。这个功能被用于服务端控制工具。  
+可以使用任何用户ID来启动组件，以及使用哪个编译配置版本（Debug, Hybrid, or Release）。  
+因为不是所有的用户都有自己编译的服务端，可以在每个用户的基础上指定服务端二进制文件的位置来使用。这可以在配置文件中指定。  
+bigworld提供的配置文件是/etc/bwmachined.conf或/etc/bwmachined.conf。更详细的说明请查看<服务端操作指南>。  
+
+#### 6.8.2. 定位服务端组件
+无论何时一个服务端组件启动，它可以公开它的Mercury接口。Mercury将会发送一个请求注册包到本地机器的Manchine进程。  
+下表描述了包中的数据域：  
+
+Field | Description
+----- | -------------
+UID | User ID
+PID | Progress ID
+Name | Name(例如CellAppMgr)
+ID | 可选的唯一ID（例如 Cell ID）  
+
+Machine接下来会把进程添加到它的注册进程列表中。它美妙会查询/proc文件系统，检测每个进程的CPU和内存用量。  
+当发布的服务端组件关闭了，它必须发送一个注销包给本地Machine。如果一个进程死亡但是没有注销，Machine会在下次poll的时候查出来并更新他们已知组件列表。  
+通过发送一个查询包给manchine是可以搜寻到匹配确定域(例如名字为"CellAppMgr")服务端组件的，每个匹配的进程会发送一个应答包回复。  
+例如，当一个CellApp启动，它需要找到在当前UID下运行的CellAppMgr进程地址。它发送一个广播消息到网络上的每个Machine查询，请求匹配UID的所有名字为"CellAppMgr"的进程。
+
+#### 6.8.3. 提供机器信息统计
+在启动时，Machine会检查（examines）文件/proc/cpuinfo以确定CPU的数量和速度。它也定期监视整个机器的CPU，内存和网络用量。这些信息可以通过UDP请求得到，可以被显示到一些通用的应用程序（例如web console）。  
+
+#### 6.8.4. 提供处理性能统计
+Machine会每秒检查/proc文件系统，并为每个注册的进程收集内存和CPU统计数据。这个信息可以通过UDP请求得到，可以被显示到一些通用的应用程序（例如web console）。  
