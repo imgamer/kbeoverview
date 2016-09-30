@@ -9,5 +9,5 @@
   kbengine官方网站：http://www.kbengine.org  
   kbengine官方论坛：http://bbs.kbengine.org  
   
-  任何问题，请联系：fengshuwang@foxmail.com（风哥哥）
+  任何问题，请联系：fengshuwang@foxmail.com
 <br/>
